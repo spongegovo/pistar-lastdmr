@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# NOT: This script was written for pi-star 4.1.4, for the DMR mode ONLY.
+# If the logfile data changes in any way with future releases of pi-star,
+# or if you want to display modes other than DMR (YSF, D-Star, P25, etc.)
+# you will need to modify this script accordingly.  I only use DMR, so
+# that's the mode I wrote this for.
+
+# Define some ways to make things bold, use different colors, and so on.
+# See "man tput" for descriptions of each tput parameter used here.
+SGR0=$(tput sgr0)
+BOLD=$(tput bold)
+# BLINK=$(tput blink)
+# BLACK=$(tput setaf 0)
+# RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+# MAGENTA=$(tput setaf 5)
+# CYAN=$(tput setaf 6)
+WHITE=$(tput setaf 7)
+
+# For grepping stuff that includes tabs
+GTAB=$'\t'
+
+LOGFILE="$(ls -1tr /var/log/pi-star/MMDVM*.log | tail -1)"
+DMRIDS=/usr/local/etc/DMRIds.dat
+
+clear
+
+# Continuosly watch the logfile.
+# You would need to stop and re-start this script after
+# the logfile rolls with each new day.
+tail -f "${LOGFILE}" | while read -r RECORD
+do
+  LOG_DATE="$(echo "${RECORD}" | awk '{ print $2 }')"
+  LOG_TIME="$(echo "${RECORD}" | awk '{ print $3 }' | cut -f1 -d".")"
+  TS="$(echo "${RECORD}" | awk '{ print $6 }' | cut -f1 -d",")"
+  SRC="$(echo "${RECORD}" | awk '{ print $8 }' | sed 's/network/NET/')"
+
+  if echo "${RECORD}" | grep -q "header from"
+  then
+    CALLSIGN="$(echo "${RECORD}" | awk '{ print $12 }')"
+    TG="$(echo "${RECORD}" | awk '{ print $15 }' | cut -f1 -d",")"
+    NAME="$(grep "${GTAB}${CALLSIGN}${GTAB}" "${DMRIDS}" | awk '{ print $NF }' | sort -u)"
+
+    # If you install "figlet", this will detect and utilize it,
+    # to add the large font display of the contact's callsign.
+    # Otherwise, the large font callsign will be skipped.
+    if command -v figlet > /dev/null 2>&1
+    then
+      echo -n "${BOLD}"
+      figlet -f small "${CALLSIGN}"
+      echo -n "${SGR0}"
+    fi
+
+    echo -e "${BOLD}${CALLSIGN}\t${NAME}${SGR0}"
+
+    echo -e "Mode: ${YELLOW}${BOLD}DMR${SGR0}${WHITE}\tSource: ${YELLOW}${BOLD}${SRC}${SGR0}${WHITE}"
+    echo -e "${BLUE}${BOLD}${LOG_DATE}\t${LOG_TIME}${SGR0}${WHITE}\tTS: ${GREEN}${BOLD}${TS}${SGR0}${WHITE}\tTG: ${GREEN}${BOLD}${TG}${SGR0}${WHITE}"
+  fi
+
+  if echo "${RECORD}" | grep -q "end of"
+  then
+    DURATION="$(echo "${RECORD}" | awk '{ print $18 }')"
+    if [[ "$(echo "${RECORD}" | grep "RSSI:")" = "" ]]
+    then
+      BER="$(echo "${RECORD}" | awk '{ print $NF }' | cut -f1 -d",")"
+      LOSS="$(echo "${RECORD}" | awk '{ print $20 }')"
+      echo -e "${GREEN}${BOLD}${DURATION}${SGR0}${WHITE} seconds\tBER: ${GREEN}${BOLD}${BER}${SGR0}${WHITE}\t${GREEN}${BOLD}${LOSS}${SGR0}${WHITE} Packet Loss"
+    else
+      BER="$(echo "${RECORD}" | awk '{ print $21 }' | cut -f1 -d",")"
+      RSSI="$(echo "${RECORD}" | awk '{ print $23 }')"
+      echo -e "${GREEN}${BOLD}${DURATION}${SGR0}${WHITE} seconds\tBER: ${GREEN}${BOLD}${BER}${SGR0}${WHITE}\tRSSI: ${GREEN}${BOLD}${RSSI} dBm${SGR0}${WHITE}"
+    fi
+    echo "------------------------------------------------------"
+  fi
+done
