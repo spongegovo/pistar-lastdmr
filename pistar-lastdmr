@@ -1,0 +1,95 @@
+#!/bin/bash
+
+PARM="${1}"
+
+# NOTE: This script was written for pi-star 4.1.4, for the DMR mode ONLY.
+# If the logfile data changes in any way with future releases of pi-star,
+# or if you want to display modes other than DMR (YSF, D-Star, P25, etc.)
+# you will need to modify this script accordingly.  I only use DMR, so
+# that's the mode I wrote this for.
+
+# Define some ways to make things bold, use different colors, and so on.
+# See "man tput" for descriptions of each tput parameter used here.
+SGR0=$(tput sgr0)
+BOLD=$(tput bold)
+# BLINK=$(tput blink)
+# BLACK=$(tput setaf 0)
+# RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+# MAGENTA=$(tput setaf 5)
+# CYAN=$(tput setaf 6)
+WHITE=$(tput setaf 7)
+
+# For grepping stuff that includes tabs
+GTAB=$'\t'
+
+# Files we'll be consulting
+LOGFILE="$(ls -1tr /var/log/pi-star/MMDVM*.log | tail -1)"
+DMRIDS=/usr/local/etc/DMRIds.dat
+TGLIST=/usr/local/etc/TGList_BM.txt
+
+clear
+
+# Continuosly watch the logfile for DMR-related data (only).
+tail -f "${LOGFILE}" | grep --line-buffered "DMR" | while read -r RECORD
+do
+  DATE_STAMP="$(echo "${RECORD}" | awk '{ print $2 }')"
+  TIME_STAMP="$(echo "${RECORD}" | awk '{ print $3 }' | cut -f1 -d".")"
+  TIME_SLOT="$(echo "${RECORD}" | awk '{ print $6 }' | cut -f1 -d",")"
+  SOURCE="$(echo "${RECORD}" | awk '{ print $8 }' | sed 's/network/NET/')"
+
+  if echo "${RECORD}" | grep -q "header from"
+  then
+    CALLSIGN="$(echo "${RECORD}" | awk '{ print $12 }')"
+    NAME="$(grep "${GTAB}${CALLSIGN}${GTAB}" "${DMRIDS}" | awk '{ print $NF }' | sort -u)"
+    TG_NUM="$(echo "${RECORD}" | awk '{ print $15 }' | cut -f1 -d",")"
+    TG_NAME="$(grep "^${TG_NUM};" "${TGLIST}" | cut -f3 -d";")"
+
+    # If you install "figlet", this will detect and utilize it,
+    # to add the large font display of the contact's callsign.
+    # Otherwise, the large font callsign will be skipped, to
+    # save screen space.
+    #
+    #     rpi-rw
+    #     sudp apt install figlet
+    #     rpi-ro
+    #
+    # However, even if figlet is installed, you can still turn
+    # off the large font display callsign to save screen space,
+    # by passing the "--nobig" parameter to this script:
+    #
+    #     pistar-lastdmr --nobig
+    #
+    if [[ "${PARM}" != "--nobig" ]]
+    then
+      if command -v figlet > /dev/null 2>&1
+      then
+        echo -n "${BOLD}"
+        figlet -f small "${CALLSIGN}"
+        echo -n "${SGR0}"
+      fi
+    fi
+
+    echo -e "Call: ${BOLD}${CALLSIGN}${SGR0}\tName: ${BOLD}${NAME}${SGR0}"
+    echo -e "${BLUE}${BOLD}${DATE_STAMP}\t${TIME_STAMP}${SGR0}${WHITE}\tTG: ${GREEN}${BOLD}${TG_NUM} (${TG_NAME})${SGR0}${WHITE}"
+  echo -e "Mode: ${YELLOW}${BOLD}DMR${SGR0}${WHITE}\tSource: ${YELLOW}${BOLD}${SOURCE}${SGR0}${WHITE}\tTS: ${GREEN}${BOLD}${TIME_SLOT}${SGR0}${WHITE}"
+  fi
+
+  if echo "${RECORD}" | grep -q "end of"
+  then
+    DURATION="$(echo "${RECORD}" | awk '{ print $18 }')"
+    if [[ "$(echo "${RECORD}" | grep "RSSI:")" = "" ]]
+    then
+      BER="$(echo "${RECORD}" | awk '{ print $NF }' | cut -f1 -d",")"
+      LOSS="$(echo "${RECORD}" | awk '{ print $20 }')"
+      echo -e "Dur: ${GREEN}${BOLD}${DURATION}${SGR0}${WHITE}s\tBER: ${GREEN}${BOLD}${BER}${SGR0}${WHITE}\t${GREEN}${BOLD}${LOSS}${SGR0}${WHITE} Packet Loss"
+    else
+      BER="$(echo "${RECORD}" | awk '{ print $21 }' | cut -f1 -d",")"
+      RSSI="$(echo "${RECORD}" | awk '{ print $23 }')"
+      echo -e "Dur: ${GREEN}${BOLD}${DURATION}${SGR0}${WHITE}s\tBER: ${GREEN}${BOLD}${BER}${SGR0}${WHITE}\tRSSI: ${GREEN}${BOLD}${RSSI} dBm${SGR0}${WHITE}"
+    fi
+    echo "--------------------------------------------------------"
+  fi
+done
