@@ -273,7 +273,7 @@ fnSHOW_DMR_CURRENT_CALL()
   echo -e "Mode: ${CYAN}${BOLD}DMR TS${TIME_SLOT}${SGR0}${WHITE}\tSrc: ${CYAN}${BOLD}${SOURCE}${SGR0}${WHITE}\tType: ${BOLD}${TYPE}${SGR0}${WHITE}"
   echo -n "QSO In Progress... "
   TOPIC="${TOPICPREFIX}/${HOSTNAME}/DMR/TS${TIME_SLOT}"
-  PAYLOAD="{\"mode\":\"receiving\", \"timeslot\":${TIME_SLOT}, \"source\":\"${SOURCE}\", \"calltype\":\"${CALLTYPE}\", \"fromcontact\":{\"callsign\":\"${FROM}\", \"name\":\"${FROM_NAME}\", \"city\":\"${CITY}\", \"state\":\"${STATE}\", \"country\":\"${COUNTRY}\"}, \"tocontact\":{\"talkgroup\":${TO},\"name\":\"${TO_NAME}\"}}"
+  PAYLOAD="{\"mode\":\"receiving\",\"timeslot\":${TIME_SLOT},\"source\":\"${SOURCE}\",\"calltype\":\"${CALLTYPE}\",\"fromcontact\":{\"callsign\":\"${FROM}\",\"name\":\"${FROM_NAME}\",\"city\":\"${CITY}\",\"state\":\"${STATE}\",\"country\":\"${COUNTRY}\"},\"tocontact\":{\"id\":\"${TO}\",\"name\":\"${TO_NAME}\"}}"
   
 }
 
