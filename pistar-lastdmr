@@ -4,6 +4,11 @@
 # May 2021
 # https://github.com/kencormack/pistar-lastdmr
 VERSION=0.99
+HOSTNAME="$(hostname)"
+MQTTBROKER="broker.emqx.io"
+MQTTUN="mqttuser"
+MQTTPW="zyx321"
+TOPICPREFIX="MMDVM"
 
 ###########################################################
 # INITIALIZATION
@@ -234,6 +239,7 @@ fnGET_DMR_VOICE_OR_DATA()
 {
   # Determine if voice or data
   TYPE="$(echo "${RECORD}" | awk '{ print $9 }')"
+  CALLTYPE="${TYPE}"
   if [[ "${TYPE}" = "data" ]]
   then
     BLOCKS="$(echo "${RECORD}" | awk '{ print $16 }')"
@@ -266,6 +272,9 @@ fnSHOW_DMR_CURRENT_CALL()
   # show the time slot, source (RF or network), and type (voice or data)
   echo -e "Mode: ${CYAN}${BOLD}DMR TS${TIME_SLOT}${SGR0}${WHITE}\tSrc: ${CYAN}${BOLD}${SOURCE}${SGR0}${WHITE}\tType: ${BOLD}${TYPE}${SGR0}${WHITE}"
   echo -n "QSO In Progress... "
+  TOPIC="${TOPICPREFIX}/${HOSTNAME}/DMR/TS${TIME_SLOT}"
+  PAYLOAD="{\"mode\":\"receiving\", \"timeslot\":${TIME_SLOT}, \"source\":\"${SOURCE}\", \"calltype\":\"${CALLTYPE}\", \"fromcontact\":{\"callsign\":\"${FROM}\", \"name\":\"${FROM_NAME}\", \"city\":\"${CITY}\", \"state\":\"${STATE}\", \"country\":\"${COUNTRY}\"}, \"tocontact\":{\"talkgroup\":${TO},\"name\":\"${TO_NAME}\"}}"
+  
 }
 
 fnGET_DMR_NET_BER()
@@ -451,6 +460,8 @@ do
   # Determine DMR Time Slot, and RF or Network traffic
   TIME_SLOT="$(echo "${RECORD}" | awk '{ print $6 }' | cut -f1 -d",")"
   SOURCE="$(echo "${RECORD}" | awk '{ print $8 }' | sed 's/network/NET/')"
+  TOPIC=""
+  PAYLOAD=""
 
   # Compensate for shifting fields between "group" and "private" ID numbers
   fnPAD_ABSENT_TG
@@ -482,6 +493,8 @@ do
 
         fnCLEAR_CURRENT_LINE
         echo -e "\rDur:  ${BLUE}${BOLD}${SECS}${SGR0}${WHITE}sec\tBER: ${BER_COLOR}${BOLD}${BER}%${SGR0}${WHITE}\tLoss: ${LOSS_COLOR}${BOLD}${LOSS}%${SGR0}${WHITE}"
+        TOPIC="${TOPICPREFIX}/${HOSTNAME}/DMR/TS${TIME_SLOT}"
+        PAYLOAD="{\"mode\":\"listening\",\"timeslot\":${TIME_SLOT},\"source\":\"${SOURCE}\",\"calltype\":\"${CALLTYPE}\",\"duration\":\"${SECS}\",\"BER\":\"${BER}\",\"loss\":\"${LOSS}\"}"
       else
         # Else, for RF traffic...
         fnGET_DMR_RF_BER
@@ -491,6 +504,8 @@ do
 
         fnCLEAR_CURRENT_LINE
         echo -e "\rDur:  ${BLUE}${BOLD}${SECS}${SGR0}${WHITE}sec\tBER: ${BER_COLOR}${BOLD}${BER}%${SGR0}${WHITE}\tRSSI: ${SMETER_COLOR}${BOLD}${SMETER} (-${DBM} dBm)${SGR0}${WHITE}"
+        TOPIC="${TOPICPREFIX}/${HOSTNAME}/DMR/TS${TIME_SLOT}"
+        PAYLOAD="{\"mode\":\"listening\",\"timeslot\":${TIME_SLOT},\"source\":\"${SOURCE}\",\"calltype\":\"${CALLTYPE}\",\"duration\":\"${SECS}\",\"BER\":\"${BER}\",\"rssi\":\"${SMETER}\",\"dbm\":\"-${DBM}\"}"
       fi
     else
       # It was data traffic...
@@ -500,6 +515,11 @@ do
       fi
     fi
     fnVERSION
+  fi
+  if [ "x${TOPIC}" != "x" -o "x${PAYLOAD}" != "x" ]; then
+    #echo -e "Topic: ${TOPIC}"
+    #echo -e "Payload: ${PAYLOAD}"
+    mosquitto_pub -h "${MQTTBROKER}" -p 8883 --capath /etc/ssl/certs -u "${MQTTUN}" -P "${MQTTPW}" -t "${TOPIC}" -m "${PAYLOAD}" 
   fi
 
   # WE'VE COMPLETED PROCESSING OF THE LOG ENTRY.
